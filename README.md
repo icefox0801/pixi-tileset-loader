@@ -1,7 +1,4 @@
 # pixi-tileset-loader
-
-> GitHub: https://github.com/icefox0801/pixi-tileset-loader
-
 Webpack loader for generating tilesets for PIXI.js
 
 ## Install
@@ -16,7 +13,7 @@ animation
 ├── 002.png
 └── 003.png
 ```
-2. See [Image processing params](#Image%20process%20params) to configure `.tileset` in `yaml` format
+2. See [Image processing params](#image-processing-params) to configure `.tileset` in `yaml` format
 ```yaml
 skip: 1
 colors: 16
