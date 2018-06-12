@@ -1,6 +1,6 @@
 {
   "name": "pixi-tileset-loader",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Webpack loader for generating tilesets for PIXI.js",
   "main": "index.js",
   "scripts": {
