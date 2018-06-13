@@ -270,7 +270,7 @@ module.exports = function (content) {
       }
 
       if (query.process) {
-        self.emitError(`Error occured in image processing, ImageMagick or pngquant may not be correctly installed or specified is operating system. See https://github.com/ant-tinyjs/tinyjs-resource-loader#%E7%B3%BB%E7%BB%9F%E4%BE%9D%E8%B5%96 for more information.`);
+        self.emitError(`Error occured in image processing, ImageMagick or pngquant may not be correctly installed or specified is operating system. See https://github.com/ant-tinyjs/tinyjs-resource-loader#System-dependencies for more information.`);
       }
 
       var content = buildFiles(self, query, self.options, name);
