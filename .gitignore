@@ -57,3 +57,10 @@ typings/
 # dotenv environment variables file
 .env
 .idea
+
+# example directories
+dist
+package-lock.json
+output/*
+
+.DS_Store

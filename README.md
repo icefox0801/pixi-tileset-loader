@@ -21,62 +21,61 @@ scale: 0.5
 ```
 3. Add `pixi-tileset-loader` in `webpack.config.js`:
 ```javascript
-module.export = {
-  // statements
-  module: {
-    loaders: [
-      {
-        test: /\.tileset/i,
-        loader: 'pixi-tileset-loader',
-        query: {
-          output: 'game/images',
-          image: { // url-loader for PNG file
-            name: 'resources/[name].[ext]',
-            limit: 4096
-          },
-          json: { // url-loader for JSON file
-            name: 'resources/[name].[ext]',
-            limit: 1
-          }
-        }
+{
+  test: /\.tileset/i,
+  use: [
+    {
+      loader: 'pixi-tileset-loader',
+      options: {
+        process: true,
+        mode: 'file',
+        output: './output',
+        name: '[name]_[hash:6].[ext]',
+        limit: false,
+        outputPath: 'res'
+        output: 'game/images',
+        // image: {
+        //   outputPath: 'res',
+        //   publicPath: './'
+        // },
+        // json: {
+        //   outputPath: 'res',
+        //   publicPath: './res'
+        // }
       }
-    ]
-  },
-  output: {
-    path: path.resovle('dist')
-  }
-};
+    }
+  ]
+}
 ```
 4. `import` or `require` the `.tileset` file in your module
 ```javascript
-import tilesetAnimationJSON from './frames/animation/.tileset';
-// Will get a JSON file path in return，and the image path will be replaced with resources/[name].[ext] in JSON file
+import tilesetAnimationJSON from './resources/animation/.tileset';
+// Will get a JSON file path in return，and the image path will be replaced in JSON file
 ```
 
 ## Processing
-1. Frames trimming：to specify a `skip` option to perform an *N to 1* frame trimming
+1. Read from cache to know weather images and tileset are change or not
 2. Spritesheet：genarate PNG and JSON files using [spritesheet.js](https://github.com/krzysztof-o/spritesheet.js)
 3. Image optimizing：use [node-pngquant](https://github.com/papandreou/node-pngquant) to reduce colors amount of PNG image
 4. Write the PNG and JSON files into `game/images` directory (specified by `query.output`)
+5. Build PNG and JSON files in `example/output` directory into `dist` (specified by `output.path` in webpack config) by [url-loader](https://github.com/webpack-contrib/url-loader). This will replace `meta.image` in JSON with `path` or `base64`
 ```bash
-game
-├── frames
-│   ├── animation # the frames directory
-│   │   ├── .tileset
+example
+└── resources
+│   ├── animation # where source images are stored
+│   │   ├── .tileset
 │   │   ├── 001.png
 │   │   ├── 002.png
 │   │   └── 003.png
-├── images # the directory to cache the PNG and JSON file
+│   └── index.js
+├── output # where JSON and image file are stored after process
 │   ├── tileset-animation.json
 │   └── tileset-animation.png
-└── resources.js
-```
-5. Build PNG and JSON files in `game/images` directory into `dist/resources` (specified by `output.path` in webpack config) by [url-loader](https://github.com/webpack-contrib/url-loader). This will replace `meta.image` in JSON with `output.publicPath` or `base64` (it depends on `query.image`)
-```bash
-dist
-└── resources
-    ├── tileset-animation.json
-    └── tileset-animation.png
+└── dist # final built result
+    ├── main.js
+    └── res
+        ├── tileset-animation_1512a1.json
+        └── tileset-animation_eee48e.png
 ```
 
 ## System dependencies
@@ -86,14 +85,21 @@ First to ensure these packages installed in system:
 
 
 ## Options
-+ `query.output`: the directory to cache PNG and JSON file, we recommend specifying a source code directory and commit this directory as well. The cache will be disabled when specified as empty string.
-+ `query.loader`: use `url-loader`, `json-loader` to process JSON file, or not process. Default is `url`, `json` and `none` are optional.
-+ `query.process`: to process frames or not. It will directly read JSON and PNG cache from the directory where `output` option specified to perform the build when `false`
-+ `query.image`: [url-loader](https://github.com/webpack-contrib/url-loader) webpack loader options for PNG file
-+ `query.json`: [url-loader](https://github.com/webpack-contrib/url-loader) webpack loader options for JSON file. Not required when `query.loader` specified as `json`
-+ `query.verbose`: log the entire error stack or not, default is `false`
++ `options.output`: the directory to cache PNG and JSON file, we recommend specifying a source code directory and commit this directory as well. The cache will be disabled when not specified
++ `options.mode`: how webpack will build tileset JSON. `file` by default to generate JSON file; `inline` to generate JSON module source code; `none` to do nothing
++ `options.process`: to process frames or not. It will directly read JSON and PNG cache from the directory where `output` option specified to perform the build when `false`
++ `options.cacheable`: cache process result or not. `false` by default, `true` to read image and JSON files from `options.output` directory which are built already, if source image files and `tileset` file are not changed
++ `options.name`: [url-loader](https://github.com/webpack-contrib/url-loader) `name` option for image and JSON files
++ `options.outputPath`: [url-loader](https://github.com/webpack-contrib/url-loader) `outputPath` option for image and JSON files
++ `options.publicPath`: [url-loader](https://github.com/webpack-contrib/url-loader) `publicPath` option for image and JSON files
++ `options.image`: [url-loader](https://github.com/webpack-contrib/url-loader) webpack loader options for PNG file
++ `options.json`: [url-loader](https://github.com/webpack-contrib/url-loader) webpack loader options for JSON file. Not required when `options.mode` specified as `inline`
++ `options.verbose`: log the entire error stack or not, default is `false`
 
-> When `query.process` is specified `false`, the first 4 steps of [processing](#Processing) will be ignored, PNG and JSON cache will be directly read from the directory `query.output` specified, and webpack will emit these files via [url-loader](https://github.com/webpack-contrib/url-loader) , but a **webpack warning** will be emitted as well. This ensure the build in remote server, where ImageMagick or pngquant package is missing.
+> The option specified in `options` will be overwrite by the same option specified in `options.image` or `options.json`.
+> When `options.process` is specified `false`, the 1 - 4 steps of [processing](#Processing) will be skipped, PNG and JSON cache will be directly read from the directory `query.output` specified, and webpack will emit these files via [url-loader](https://github.com/webpack-contrib/url-loader) , but a **webpack warning** will be emitted as well. This ensure the build in remote server, where ImageMagick or pngquant package is missing.
+> We recommend to specify `options.cacheable` as `true` to improve webpack building performance, by skipping 2 - 4 steps of [processing](#Processing), and avoid unwanted image and json file change due to different system environment(e.g. different version of `ImageMagick`) when source images and tileset file are not changed
+> `options.resource` can be specified `'window.baseRoot + "$url"'` for example, `baseRoot` is a path similar to `/path/to/image`. Used to concat image path when code running in browser
 
 ## Image processing params
 + `trim`：trim the whitespace in PNG image or not, default is `false`

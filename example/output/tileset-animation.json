@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "image": "tileset-animation.png",
+    "size": {
+      "w": 60,
+      "h": 120
+    },
+    "scale": "1"
+  },
+  "frames": {
+    "tileset-animation-001.png": {
+      "frame": {
+        "x": 10,
+        "y": 10,
+        "w": 40,
+        "h": 20
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 20
+      },
+      "sourceSize": {
+        "w": 40,
+        "h": 20
+      }
+    },
+    "tileset-animation-002.png": {
+      "frame": {
+        "x": 10,
+        "y": 50,
+        "w": 40,
+        "h": 20
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 20
+      },
+      "sourceSize": {
+        "w": 40,
+        "h": 20
+      }
+    },
+    "tileset-animation-003.png": {
+      "frame": {
+        "x": 10,
+        "y": 90,
+        "w": 40,
+        "h": 20
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 20
+      },
+      "sourceSize": {
+        "w": 40,
+        "h": 20
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "scripts": {
+    "dev": "NODE_ENV=development webpack-dev-server",
+    "dev:debug": "NODE_ENV=development node --inspect-brk --nolazy ./node_modules/webpack-dev-server/bin/webpack-dev-server",
+    "build": "rm -rf dist && NODE_ENV=production webpack -p",
+    "build:debug": "rm -rf dist && NODE_ENV=production node --inspect-brk --nolazy ./node_modules/webpack/bin/webpack -p"
+  },
+  "devDependencies": {
+    "webpack": "^4.43.0",
+    "webpack-cli": "^3.3.11",
+    "webpack-dev-server": "^3.11.0"
+  }
+}

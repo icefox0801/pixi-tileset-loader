@@ -8,69 +8,106 @@ var Promise = require('bluebird');
 
 var BinPacking = require('./lib/BinPacking');
 var FramesPacker = require('./lib/FramesPacker');
+var readFromCacheAsync = require('./lib/readFromCacheAsync');
 var preprocessAsync = require('./lib/preprocessAsync');
 var getImageSizeAsync = require('./lib/getImageSizeAsync');
 var spritesheetAsync = require('./lib/spritesheetAsync');
 var pngOptimizeAsync = require('./lib/pngOptimizeAsync');
 
 var urlLoader = require('url-loader');
-var jsonLoader = require('json-loader');
 
-function rewriteJSON (content, imagePathStr, loader) {
+function rewriteJSON (content, imagePathStr, mode, resource) {
   var sheetConfig = JSON.parse(content);
   var imagePath = /"([^"]+)"/.exec(imagePathStr)[1];
   sheetConfig.meta.image = imagePath;
 
-  if (loader === 'json') {
-    sheetConfig.meta.json = `${imagePath.substr(0, imagePath.lastIndexOf('.png')) || imagePath}.json`;
+  if (resource) {
+    sheetConfig.meta.image = `$$${resource.replace('$url', sheetConfig.meta.image)}$$`;
+  }
+
+  if (mode === 'inline') {
+    sheetConfig.meta.json = `${path.basename(imagePath, '.png')}.json`;
+    if (resource) {
+      sheetConfig.meta.json = `$$${resource.replace('$url', sheetConfig.meta.json)}$$`;
+    }
   }
 
   return JSON.stringify(sheetConfig);
 }
 
-function buildFiles (context, query, options = {}, name) {
-  var content = '';
-  if (query.loader === 'none') {
-    return content;
+function buildFiles (context, options, name, callback) {
+  var imageOptions = {};
+
+  for (var key in options) {
+    if (typeof key !== 'object') imageOptions[key] = options[key];
   }
+
   // build image
-  var imageFullPath = path.resolve(query.output, `${name}.png`);
+  var imagePathStr;
+  var imageFullPath = path.resolve(options.output, `${name}.png`);
   var imageContent = fs.readFileSync(imageFullPath);
-  var imageContext = Object.create(context);
-  imageContext.resourcePath = imageFullPath;
-  imageContext.query = query.image;
-  imageContext.options = options;
-  var imagePathStr = urlLoader.call(imageContext, imageContent);
-  // build json
-  var jsonFullPath = path.resolve(query.output, `${name}.json`);
-  var jsonStr = fs.readFileSync(jsonFullPath);
-  var jsonContent = rewriteJSON(jsonStr, imagePathStr, query.loader);
-  var jsonContext = Object.create(context);
-  jsonContext.resourcePath = jsonFullPath;
-  jsonContext.query = query.json;
-  jsonContext.options = options;
+  var imageContext = Object.assign({}, context, {
+    resourcePath: imageFullPath,
+    query: Object.assign({}, imageOptions, options.image)
+  });
 
-  if (query.loader === 'json') {
-    content = jsonLoader.call(jsonContext, jsonContent);
-  } else {
+  imagePathStr = urlLoader.call(imageContext, imageContent);
+  afterImage(imagePathStr, function(rs) {
+    callback(rs);
+  });
+
+  function afterImage(imagePathStr, cb) {
+    var content = '';
+    // build json
+    var jsonFullPath = path.resolve(options.output, `${name}.json`);
+    var jsonStr = fs.readFileSync(jsonFullPath);
+    var jsonContent = rewriteJSON(jsonStr, imagePathStr, options.mode, options.resource);
+    if (options.mode === 'inline') {
+      if (options.resource) {
+        jsonContent = jsonContent.split('$$').map(segment => segment.replace(/(^")|("$)/g, '')).join('');
+      }
+
+      var source = `module.exports = ${jsonContent};`;
+      return cb(source);
+    } else if (options.mode === 'none') {
+      return cb(jsonContent);
+    }
+
+    var jsonOptions = {};
+
+    for (var key in options) {
+      if (typeof key !== 'object') jsonOptions[key] = options[key];
+    }
+
+    var jsonContext = Object.assign({}, context, {
+      resourcePath: jsonFullPath,
+      query: Object.assign({}, jsonOptions, options.json)
+    });
+
     content = urlLoader.call(jsonContext, jsonContent);
+    cb(content);
   }
-
-  return content;
 }
 
 module.exports = function (content) {
   var self = this;
   var callback = self.async();
-  var query = loaderUtils.getOptions(self) || {};
+  var options = loaderUtils.getOptions(self) || {};
   var config = yaml.load(content.toString()) || {};
   var framesPacker = new FramesPacker(self.context, config);
   var inputTemp = tempfile();
   var outputTemp = tempfile();
 
-  query.process = typeof query.process === 'undefined' ? true : query.process;
-  query.output = query.output || inputTemp;
+  function afterProcess(result) {
+    process.nextTick(function () {
+      fse.remove(inputTemp);
+      fse.remove(outputTemp);
+    });
+    callback(null, result);
+  }
 
+  options.process = typeof options.process === 'undefined' ? true : options.process;
+  options.output = options.output || inputTemp;
   self.cacheable(true);
   self.addContextDependency(self.context);
 
@@ -81,76 +118,66 @@ module.exports = function (content) {
     });
   }
 
-  if (!query.process) {
+  if (!options.process) {
     var result = '';
-    var imageFullPath = path.resolve(query.output, `${framesPacker.output}.png`);
+    var imageFullPath = path.resolve(options.output, `${framesPacker.output}.png`);
     if (!fs.existsSync(imageFullPath)) {
-      self.emitError(`${framesPacker.output}.json and ${framesPacker.output}.png are not found in the directory ouput option specified when process option is disabled, please ensure these files were built into this directory in the last build.`);
+      self.emitError(`${framesPacker.output}.json and ${framesPacker.output}.png are not found in the directory output option specified when process option is disabled, please ensure these files were built into this directory in the last build.`);
+      return afterProcess(result);
     } else {
-      self.emitWarning(`Image processing will not execute when process option is disabled. ${framesPacker.output}.json and ${framesPacker.output}.png will be read from the directory ouput option specified.`);
-      result = buildFiles(self, query, self.options, framesPacker.output);
+      self.emitWarning(`Image processing will not execute when process option is disabled. ${framesPacker.output}.json and ${framesPacker.output}.png will be read from the directory output option specified.`);
+      return buildFiles(self, options, framesPacker.output, afterProcess);
     }
-
-    process.nextTick(function () {
-      fse.remove(inputTemp);
-      fse.remove(outputTemp);
-    });
-
-    return callback(null, result);
   }
 
   framesPacker.initFrames();
   framesPacker.compressFrames();
 
-  preprocessAsync(framesPacker.frames, inputTemp, framesPacker.config)
-    .then(function (compressdFrames) {
-      return getImageSizeAsync(compressdFrames, framesPacker.config);
-    })
-    .then(function (sizedFrames) {
-      var binPacking = new BinPacking(framesPacker.output, sizedFrames, {
-        rotatable: framesPacker.config.rotatable,
-        algorithm: 'max-rects'
-      });
-      binPacking.pack();
-      var packedFrames = binPacking.packed;
-      var canvasSize = {
-        width: binPacking.canvasWidth,
-        height: binPacking.canvasHeight
-      };
-      var outputPath = path.join(outputTemp, `${framesPacker.output}`);
-      fse.ensureDirSync(outputTemp);
-      return spritesheetAsync(packedFrames, canvasSize, outputPath, framesPacker.config);
-    })
-    .then(function (sourcePath) {
-      var destPath = path.resolve(path.join(query.output, framesPacker.output));
-      return Promise.all([
-        pngOptimizeAsync(`${sourcePath}.png`, `${destPath}.png`, framesPacker.config.colors),
-        fse.copy(`${sourcePath}.json`, `${destPath}.json`)
-      ]);
+  readFromCacheAsync(options.cacheable, config, framesPacker.frames, framesPacker.output, options.output)
+    .then(function (cached) {
+      if (!cached) {
+        return preprocessAsync(framesPacker.frames, inputTemp, framesPacker.config)
+          .then(function (compressedFrames) {
+            return getImageSizeAsync(compressedFrames, framesPacker.config);
+          })
+          .then(function (sizedFrames) {
+            var binPacking = new BinPacking(framesPacker.output, sizedFrames, {
+              rotatable: framesPacker.config.rotatable,
+              algorithm: 'max-rects'
+            });
+            binPacking.pack();
+            var packedFrames = binPacking.packed;
+            var canvasSize = {
+              width: binPacking.canvasWidth,
+              height: binPacking.canvasHeight
+            };
+            var outputPath = path.join(outputTemp, `${framesPacker.output}`);
+            fse.ensureDirSync(outputTemp);
+            return spritesheetAsync(packedFrames, canvasSize, outputPath, framesPacker.config);
+          })
+          .then(function (sourcePath) {
+            var destPath = path.resolve(path.join(options.output, framesPacker.output));
+            return Promise.all([
+              pngOptimizeAsync(`${sourcePath}.png`, `${destPath}.png`, framesPacker.config.colors),
+              fse.copy(`${sourcePath}.json`, `${destPath}.json`)
+            ]);
+          });
+      }
     })
     .then(function () {
-      var content = buildFiles(self, query, self.options, framesPacker.output);
-      process.nextTick(function () {
-        fse.remove(inputTemp);
-        fse.remove(outputTemp);
-      });
-      callback(null, content);
+      buildFiles(self, options, framesPacker.output, afterProcess);
     })
     .catch(function (error) {
-      if (query.verbose) {
+      debugger;
+      if (options.verbose) {
         console.error(error);
       }
 
-      if (query.process) {
-        self.emitError(`Error occured in image processing, ImageMagick or pngquant may not be correctly installed or specified in operating system. See https://github.com/icefox0801/pixi-tileset-loader#system-dependencies for more information.`);
+      if (options.process) {
+        self.emitError(`Error occurred in image processing, ImageMagick or pngquant may not be correctly installed or specified in operating system. See https://github.com/icefox0801/pixi-tileset-loader#system-dependencies for more information.`);
       }
 
-      var content = buildFiles(self, query, self.options, framesPacker.output);
-      process.nextTick(function () {
-        fse.remove(inputTemp);
-        fse.remove(outputTemp);
-      });
-      callback(null, content);
+      buildFiles(self, options, framesPacker.output, afterProcess);
     });
 };
 
